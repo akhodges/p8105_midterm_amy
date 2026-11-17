@@ -1,0 +1,114 @@
+McBroken: Monthly Patterns in McDonald’s Ice Cream Machine Availability
+================
+Amy Hodges
+November 17th, 2026
+
+### Introduction
+
+This report analyzes monthly McDonald’s McFlurry machine status from
+November 2025 through October 2026 in the United States. Store-level
+analyses are combined with location and region information to explore
+brokenness, changes over time, and geographic patterns. Brokenness is
+analyzed only for observations marked active; missing status records are
+not included.
+
+### Data Cleaning & Overview
+
+``` r
+# Importing all monthly datasets
+monthly_mcbroken <- list.files(
+  path = "mcbroken_data",
+  pattern = NULL,
+  full.names = TRUE
+  )
+
+# Combining monthly datasets
+mcbroken_raw <- map_dfr(monthly_mcbroken, read_csv)
+
+# Widening date variable and changing variable types
+mcbroken_clean <- mcbroken_raw %>%
+  mutate(
+    year = substr(month, 1, 4),
+    month = substr(month, 6, 7),
+    across(
+      c(month, store_id, year),
+           as.factor),
+  )
+
+# Importing store information datasets
+store_info <- read_csv("store_data/store_info.csv")
+state_regions <- read_csv("store_data/state_regions.csv")
+
+# Matching variable types before joining
+store_info <- store_info %>%
+  mutate(
+    across(
+      c(store_id, state, city),
+      as.factor)
+    )
+
+state_regions <- state_regions %>%
+  mutate(
+    across(
+      c(state, region),
+      as.factor)
+    )
+
+# Joining McBroken and store information datasets
+mcbroken_clean <- mcbroken_clean %>%
+  left_join(store_info, by = "store_id") %>%
+  left_join(state_regions, by = "state")
+
+# Store quantification
+n_stores = n_distinct(mcbroken_clean$store_id)
+
+state_store_counts <- mcbroken_clean %>% 
+  count(state, sort = TRUE)
+
+state_most_machines <- state_store_counts %>%
+  slice_head(n=1)
+state_most_machines
+```
+
+    ## # A tibble: 1 × 2
+    ##   state     n
+    ##   <fct> <int>
+    ## 1 CA    14743
+
+``` r
+state_least_machines <- state_store_counts %>%
+  slice_tail(n=1)
+state_least_machines
+```
+
+    ## # A tibble: 1 × 2
+    ##   state     n
+    ##   <fct> <int>
+    ## 1 MP       24
+
+``` r
+# Overall brokenness rate among active machines
+brokenness_rate_overall <- mcbroken_clean %>%
+  summarise(
+    status_number = sum(!is.na(active)),
+    active_number = sum(active %in% TRUE, na.rm = TRUE),
+    inactive_number = sum(active %in% FALSE, na.rm = TRUE),
+    broken_number = sum(broken %in% TRUE, na.rm = TRUE),
+    broken_rate = 100*broken_number/active_number,
+  )
+```
+
+To clean this data, I first imported and merged the monthly McFlurry
+machine status datasets and separated the date variable into month and
+year. After importing store information datasets and adjusting all
+variable types appropriately, I merged the McFlurry machine status and
+store information datasets into one dataframe. The resulting cleaned
+dataframe includes a total of 163203 observations across 11 variables,
+including McFlurry machine status and brokenness, date, and store
+location information.
+
+There are data on McFlurry machines at 13792 different McDonald’s
+locations in the U.S., with California having the most stores at 14743
+and the Northern Mariana Islands having the least at 24. The overall
+rate of brokenness of active McFlurry machines across all U.S.
+McDonald’s locations between November 2025 and October 2026 was 14.44%.
