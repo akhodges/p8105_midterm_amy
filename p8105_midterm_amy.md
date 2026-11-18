@@ -129,34 +129,24 @@ stores_obs_count <- mcbroken_clean %>%
   count(store_id, sort = TRUE)
 
 stores_least_obs <- stores_obs_count %>%
-  slice_tail(n=20)
+  slice_tail(n=10)
 
 stores_least_obs
 ```
 
-    ## # A tibble: 20 × 2
+    ## # A tibble: 10 × 2
     ##    store_id     n
     ##    <fct>    <int>
-    ##  1 58523942     1
-    ##  2 58704102     1
-    ##  3 68511183     1
-    ##  4 69020232     1
-    ##  5 73260200     1
-    ##  6 75988973     1
-    ##  7 77190555     1
-    ##  8 78159568     1
-    ##  9 80560257     1
-    ## 10 80812138     1
-    ## 11 82341179     1
-    ## 12 84752369     1
-    ## 13 84890895     1
-    ## 14 90062419     1
-    ## 15 90199064     1
-    ## 16 91144285     1
-    ## 17 91811163     1
-    ## 18 91911815     1
-    ## 19 96767040     1
-    ## 20 99184432     1
+    ##  1 82341179     1
+    ##  2 84752369     1
+    ##  3 84890895     1
+    ##  4 90062419     1
+    ##  5 90199064     1
+    ##  6 91144285     1
+    ##  7 91811163     1
+    ##  8 91911815     1
+    ##  9 96767040     1
+    ## 10 99184432     1
 
 ``` r
 # Checking for high rates of inactivity/brokenness at stores with at least 9 observations
@@ -321,19 +311,31 @@ closest_store_status_table <- mcbroken_clean %>%
     `Machine Broken?` = broken
     ) %>%
   kable(caption = "Monthly McFlurry machine status at the McDonald's closest to Mailman School of Public Health")
-closest_store_table 
+closest_store_status_table 
 ```
 
-| Store ID | Street Address | City | State | Distance (km) | Observations | Inactivity Rate | Brokenness Rate |
-|:---|:---|:---|:---|---:|---:|---:|---:|
-| 40651456 | 4040 Broadway | New York | NY | 0.35 | 12 | 0 | 0.08 |
+| Month | Machine Active? | Machine Broken? |
+|:------|:----------------|:----------------|
+| 01    | TRUE            | FALSE           |
+| 02    | TRUE            | FALSE           |
+| 03    | TRUE            | FALSE           |
+| 04    | TRUE            | FALSE           |
+| 05    | TRUE            | FALSE           |
+| 06    | TRUE            | FALSE           |
+| 07    | TRUE            | FALSE           |
+| 08    | TRUE            | FALSE           |
+| 09    | TRUE            | TRUE            |
+| 10    | TRUE            | FALSE           |
+| 11    | TRUE            | FALSE           |
+| 12    | TRUE            | FALSE           |
 
-McDonald’s location closest to Mailman School of Public Health
+Monthly McFlurry machine status at the McDonald’s closest to Mailman
+School of Public Health
 
 The nearest store to the Mailman School of Public Health is 4040
 Broadway, New York, approximately 0.35 km away. This location’s McFlurry
 machine was both active and working over the entire time period of the
-dataset.
+dataset, with the exception of September, when the machine was broken.
 
 #### NYC McDonald’s Locations with Highest Brokenness Rates
 
@@ -413,6 +415,12 @@ break_fix_table %>%
 | Broken          |  10521 |    7918 |
 
 Machine status changes between months
+
+According to the table above, most machines go from working to broken or
+stay in their previous status between months. Working machines are more
+likely to stay working (101,446) than become broken (8,176), while
+broken machines are more likely to stay broken (10,521) than return to
+working status (7,918).
 
 #### Average Brokenness by Region and Month
 
@@ -628,6 +636,12 @@ state_month_broken_plot
 
 ![](p8105_midterm_amy_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
 
+Looking at the plot above, monthly brokenness rates were generally low
+and relatively stable across most states throughout the study period.
+Some states showed noticeable fluctuations or occasional spikes, but
+there was no widespread, consistent directional trend in brokenness
+across states.
+
 ### Average Brokenness Across States
 
 ``` r
@@ -660,7 +674,13 @@ avg_broken_state_plot
 
 ![](p8105_midterm_amy_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
 
-### 
+According to the plot above, store-level average brokenness rates vary
+widely across states. Most states have low median brokenness rates, but
+many show substantial variability and high-brokenness outliers,
+indicating that some individual McDonald’s locations experience much
+greater machine downtime than others.
+
+### Average Brokenness Rates by Geographic Location
 
 ``` r
 # Merging datasets
@@ -733,8 +753,20 @@ nyc_plot_panel <- ggplot(
   theme(legend.position = "none")
 
 # Combining the two panels into one plot
-two_panel_stores_plot <- continental_plot_panel + nyc_plot_panel
+two_panel_stores_plot <- continental_plot_panel + nyc_plot_panel +
+  plot_annotation(
+    title = "Average Brokenness Rates by Geographic Location",
+    theme = theme(
+      plot.title = element_text(size = 18, hjust = 0.5)
+    )
+  )
+
 two_panel_stores_plot
 ```
 
 ![](p8105_midterm_amy_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
+McDonald’s locations are concentrated in more densely populated areas,
+particularly in the eastern U.S. The NYC panel shows substantial
+variation in store-level brokenness within a relatively small geographic
+area, highlighting individual differences that are less apparent at the
+national scale.

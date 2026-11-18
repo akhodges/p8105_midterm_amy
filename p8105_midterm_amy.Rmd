@@ -104,7 +104,7 @@ stores_obs_count <- mcbroken_clean %>%
   count(store_id, sort = TRUE)
 
 stores_least_obs <- stores_obs_count %>%
-  slice_tail(n=20)
+  slice_tail(n=10)
 
 stores_least_obs
 
@@ -226,10 +226,11 @@ closest_store_status_table <- mcbroken_clean %>%
     `Machine Broken?` = broken
     ) %>%
   kable(caption = "Monthly McFlurry machine status at the McDonald's closest to Mailman School of Public Health")
-closest_store_table 
+closest_store_status_table 
+
 ```
 
-The nearest store to the Mailman School of Public Health is `r closest_store_mailman$street`, `r closest_store_mailman$city`, approximately `r round(closest_store_mailman$distance_km, 2)` km away. This location's McFlurry machine was both active and working over the entire time period of the dataset.
+The nearest store to the Mailman School of Public Health is `r closest_store_mailman$street`, `r closest_store_mailman$city`, approximately `r round(closest_store_mailman$distance_km, 2)` km away. This location's McFlurry machine was both active and working over the entire time period of the dataset, with the exception of September, when the machine was broken.
 
 #### NYC McDonald's Locations with Highest Brokenness Rates
 ```{r, warning = FALSE}
@@ -288,6 +289,8 @@ break_fix_table %>%
   kable(caption = "Machine status changes between months")
 
 ```
+
+According to the table above, most machines go from working to broken or stay in their previous status between months. Working machines are more likely to stay working (101,446) than become broken (8,176), while broken machines are more likely to stay broken (10,521) than return to working status (7,918).
 
 #### Average Brokenness by Region and Month
 ```{r}
@@ -350,6 +353,8 @@ state_month_broken_plot <- ggplot(
 state_month_broken_plot
 ```
 
+Looking at the plot above, monthly brokenness rates were generally low and relatively stable across most states throughout the study period. Some states showed noticeable fluctuations or occasional spikes, but there was no widespread, consistent directional trend in brokenness across states.
+
 ### Average Brokenness Across States
 ```{r, warning = FALSE}
 
@@ -379,6 +384,8 @@ avg_broken_state_plot <- ggplot(
 
 avg_broken_state_plot
 ```
+
+According to the plot above, store-level average brokenness rates vary widely across states. Most states have low median brokenness rates, but many show substantial variability and high-brokenness outliers, indicating that some individual McDonald's locations experience much greater machine downtime than others.
 
 ### Average Brokenness Rates by Geographic Location
 ```{r, warning = FALSE, fig.width = 12, fig.height = 8}
@@ -464,4 +471,4 @@ two_panel_stores_plot <- continental_plot_panel + nyc_plot_panel +
 two_panel_stores_plot
 
 ```
-
+McDonald's locations are concentrated in more densely populated areas, particularly in the eastern U.S. The NYC panel shows substantial variation in store-level brokenness within a relatively small geographic area, highlighting individual differences that are less apparent at the national scale.
