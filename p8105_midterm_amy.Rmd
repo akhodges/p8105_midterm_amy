@@ -13,6 +13,7 @@ library(lubridate)
 library(knitr)
 library(patchwork)
 library(wordcountaddin)
+
 ```
 
 ### Introduction
@@ -89,14 +90,378 @@ brokenness_rate_overall <- mcbroken_clean %>%
     broken_number = sum(broken %in% TRUE, na.rm = TRUE),
     broken_rate_overall = 100*broken_number/active_number,
   )
+brokenness_rate_overall
 ```
-
 To clean this data, I first imported and merged the monthly McFlurry machine status datasets and separated the date variable into month and year. After importing store information datasets and adjusting all variable types appropriately, I merged the McFlurry machine status and store information datasets into one dataframe. The resulting cleaned dataframe includes a total of `r nrow(mcbroken_clean)` observations across `r ncol(mcbroken_clean)` variables, including McFlurry machine status and brokenness, date, and store location information. 
 
-There are data on McFlurry machines at `r n_stores` different McDonald's locations in the U.S., with California having the most stores at `r state_most_machines$n` and the Northern Mariana Islands having the least at `r state_least_machines$n`. The overall rate of brokenness of active McFlurry machines across all U.S. McDonald's locations between November 2025 and October 2026 was `r round(brokenness_rate_overall$broken_rate, 2)`%.
+There are data on McFlurry machines at `r n_stores` different McDonald's locations in the U.S., with California having the most stores at `r state_most_machines$n` and the Northern Mariana Islands having the least at `r state_least_machines$n`. The overall rate of brokenness of active McFlurry machines across all U.S. McDonald's locations between November 2025 and October 2026 was `r round(brokenness_rate_overall$broken_rate_overall, 2)`%.
 
 ### Exploratory Analysis
+#### McDonald's Locations with Unusual Stats
 ```{r}
+# Checking for stores with very few observations
+stores_obs_count <- mcbroken_clean %>% 
+  count(store_id, sort = TRUE)
+
+stores_least_obs <- stores_obs_count %>%
+  slice_tail(n=20)
+
+stores_least_obs
+
+# Checking for high rates of inactivity/brokenness at stores with at least 9 observations
+store_observations <- mcbroken_clean %>%
+  group_by(store_id) %>%
+  summarise(
+    observations = n(),
+    status_n = sum(!is.na(active)),
+    active_n = sum(active %in% TRUE, na.rm = TRUE),
+    inactive_n = sum(active %in% FALSE, na.rm = TRUE),
+    broken_n = sum(broken %in% TRUE, na.rm = TRUE),
+    inactive_rate = if_else(status_n > 0, inactive_n / status_n, NA),
+    broken_rate = if_else(active_n > 0, broken_n / active_n, NA),
+    .groups = "drop"
+  ) %>%
+  left_join(store_info, by = "store_id")
+
+# Checking how many stores have less than 9 observations
+few_obs_stores <- store_observations %>% filter(observations < 9)
+
+# Stores with highest inactivity rates
+super_inactive_stores <- store_observations %>%
+  filter(status_n >= 9) %>%
+  arrange(desc(inactive_rate)) %>%
+  slice_head(n=10) %>%
+  rename(
+    `Store ID` = store_id, 
+    `Observations` = observations, 
+    `Statuses` = status_n, 
+    `Active Machines` = active_n, 
+    `Inactive Machines` = inactive_n, 
+    `Broken Machines` = broken_n, 
+    `Inactivity Rate` = inactive_rate, 
+    `Brokenness Rate` = broken_rate, 
+    `Longitude` = longitude, 
+    `Latitude` = latitude, 
+    `State` = state, 
+    `City` = city, 
+    `Street Address` = street
+    ) %>%
+  kable(digits = 2, caption = "Locations with the highest inactivity rates (at least nine observed statuses)")
+
+super_inactive_stores
+
+# Stores with highest brokenness rates
+super_broke_stores <- store_observations %>%
+  filter(active_n >= 9) %>%
+  arrange(desc(broken_rate)) %>%
+  slice_head(n=10) %>%
+  rename(
+    `Store ID` = store_id, 
+    `Observations` = observations, 
+    `Statuses` = status_n, 
+    `Active Machines` = active_n, 
+    `Inactive Machines` = inactive_n, 
+    `Broken Machines` = broken_n, 
+    `Inactivity Rate` = inactive_rate, 
+    `Brokenness Rate` = broken_rate,
+    `Longitude` = longitude, 
+    `Latitude` = latitude, 
+    `State` = state, 
+    `City` = city, 
+    `Street Address` = street
+    ) %>%
+  kable(digits = 2, caption = "Locations with the highest brokenness rates (at least nine active observations)")
+
+super_broke_stores
+
+```
+
+Of `r nrow(store_observations)` stores, `r nrow(few_obs_stores)` have fewer than nine monthly records. Some locations have high inactivity or brokenness rates (shown in the tables above) but these rates may be more extreme due to a small number of observed active statuses.
+
+#### Analysis of the McDonald's Closest to Mailman School of Public Health
+```{r, warning = FALSE}
+
+# Distance calculation to Mailman School of Public Health
+mailman_lat <- 40.8426
+mailman_lon <- -73.9431
+
+mailman_distance <- function(lat, lon) {
+  6371 * 2 * asin(sqrt(
+    sin((lat - mailman_lat) * pi / 360)^2 +
+      cos(mailman_lat * pi / 180) * cos(lat * pi / 180) *
+      sin((lon - mailman_lon) * pi / 360)^2
+  ))
+}
+
+# Identifying the closest store
+closest_store_mailman <- store_observations %>%
+  filter(!is.na(latitude), !is.na(longitude)) %>%
+  mutate(distance_km = mailman_distance(latitude, longitude)) %>%
+  slice_min(distance_km, n = 1)
+
+# Creating a table of closest store's information
+closest_store_table <- closest_store_mailman %>%
+  select(store_id, street, city, state, distance_km, observations, inactive_rate, broken_rate) %>%
+  rename(
+    `Store ID` = store_id, 
+    `Street Address` = street, 
+    `City` = city, 
+    `State` = state, 
+    `Distance (km)` = distance_km, 
+    `Observations` = observations, 
+    `Inactivity Rate` = inactive_rate, 
+    `Brokenness Rate` = broken_rate
+    ) %>%
+  kable(digits = 2, caption = "McDonald's location closest to Mailman School of Public Health")
+closest_store_table
+
+# Creating a table of closest store's machine status over time
+closest_store_status_table <- mcbroken_clean %>%
+  filter(store_id == closest_store_mailman$store_id) %>%
+  arrange(month) %>%
+  select(month, active, broken) %>%
+  rename(
+    `Month` = month, 
+    `Machine Active?` = active, 
+    `Machine Broken?` = broken
+    ) %>%
+  kable(caption = "Monthly McFlurry machine status at the McDonald's closest to Mailman School of Public Health")
+closest_store_table 
+```
+
+The nearest store to the Mailman School of Public Health is `r closest_store_mailman$street`, `r closest_store_mailman$city`, approximately `r round(closest_store_mailman$distance_km, 2)` km away. This location's McFlurry machine was both active and working over the entire time period of the dataset.
+
+#### NYC McDonald's Locations with Highest Brokenness Rates
+```{r, warning = FALSE}
+
+# Filtering most broken NYC locations and creating a table
+nyc_stores <- store_observations %>%
+  filter(state == "NY",
+         between(longitude, -74.26, -73.7),
+         between(latitude, 40.5, 40.92),
+         active_n >= 9) %>%
+  arrange(desc(broken_rate)) 
+
+nyc_stores_table <- nyc_stores %>%
+  select(street, city, observations, active_n, broken_n, broken_rate) %>%
+  slice_head(n = 10) %>%
+  rename(
+    `Street Address` = street, 
+    `City` = city, 
+    `Observations` = observations, 
+    `Active Machines` = active_n, 
+    `Broken Machines` = broken_n, 
+    `Brokenness Rate` = broken_rate
+    ) %>%
+  kable(digits = 2, caption = "NYC locations with the highest brokenness rates (at least nine active observations)")
+
+nyc_stores_table
+
+```
+
+#### Machine Breaking and Fixing Month-to-Month
+```{r, warning = FALSE}
+
+break_fix_data <- mcbroken_clean %>%
+  mutate(status = case_when(
+    active %in% TRUE & broken %in% TRUE ~ "Broken",
+    active %in% TRUE & broken %in% FALSE ~ "Working",
+    .default = NA)
+    ) %>%
+  arrange(store_id, year, month) %>%
+  group_by(store_id) %>%
+  mutate(previous_status = lag(status)) %>%
+  ungroup()
+
+break_fix_table <- break_fix_data %>%
+  filter(!is.na(previous_status), !is.na(status)) %>%
+  count(previous_status, status) %>%
+  complete(previous_status = c("Working", "Broken"),
+           status = c("Working", "Broken"), fill = list(n = 0)) %>%
+  pivot_wider(names_from = status, values_from = n) %>%
+  arrange(factor(previous_status, levels = c("Working", "Broken")))
+
+break_fix_table %>% 
+  rename(
+    `Previous Status` = previous_status
+    ) %>%
+  kable(caption = "Machine status changes between months")
+
+```
+
+#### Average Brokenness by Region and Month
+```{r}
+# Calculating average brokenness by region and month
+region_month_broken <- mcbroken_clean %>%
+  group_by(region, year, month) %>%
+  summarise(
+    broken = sum(broken %in% TRUE, na.rm = TRUE),
+    active = sum(active %in% TRUE, na.rm = TRUE),
+    average_brokenness = 100*broken / active,
+    .groups = "drop"
+  )
+
+# Creating a table
+region_month_broken_table <- region_month_broken %>%
+  rename(
+    `Region` = region, 
+    `Year` = year, 
+    `Month` = month, 
+    `Broken Machines` = broken, 
+    `Active Machines` = active, 
+    `Average Brokenness Rate` = average_brokenness) %>%
+  kable(digits = 3, caption = "Average brokenness by region and month")
+
+region_month_broken_table
+```
+
+### Visualizations
+#### Average Brokenness by State Across Months
+```{r}
+
+# Calculating average brokenness by state
+state_month_broken <- mcbroken_clean %>%
+  group_by(state, year, month) %>%
+  summarise(
+    broken = sum(broken %in% TRUE, na.rm = TRUE),
+    active = sum(active %in% TRUE, na.rm = TRUE),
+    average_brokenness = 100 * broken / active,
+    .groups = "drop"
+  ) %>%
+  mutate(date = as.Date(paste(year, month, "01", sep = "-")))
+
+# Plotting
+state_month_broken_plot <- ggplot(
+  state_month_broken, 
+  aes(x = date, y = average_brokenness)) +
+  geom_line() +
+  facet_wrap(~state) +
+  scale_y_continuous(breaks = c(0, 100), limits = c(0, 100)) +
+  labs(
+    title = "Average Brokenness by State Across Months",
+    x = "Month",
+    y = "Brokenness Rate (%)"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.spacing = grid::unit(0.5, "lines")
+  )
+
+state_month_broken_plot
+```
+
+### Average Brokenness Across States
+```{r, warning = FALSE}
+
+# Calculating average brokenness 
+store_avg_brokenness <- mcbroken_clean %>%
+  group_by(store_id, state) %>%
+  summarise(
+    broken = sum(broken %in% TRUE, na.rm = TRUE),
+    active = sum(active %in% TRUE, na.rm = TRUE),
+    average_brokenness = 100 * broken / active,
+    .groups = "drop"
+  )
+
+# Plotting
+avg_broken_state_plot <- ggplot(
+  store_avg_brokenness, 
+  aes(x = reorder(state, average_brokenness), y = average_brokenness)) +
+  geom_boxplot() +
+  labs(
+    title = "Distribution of Store-Level Brokenness Across States",
+    x = "State",
+    y = "Average Brokenness Rate (%)"
+  ) +
+  theme(
+  axis.text.x = element_text(size = 5.5)
+)
+
+avg_broken_state_plot
+```
+
+### Average Brokenness Rates by Geographic Location
+```{r, warning = FALSE, fig.width = 12, fig.height = 8}
+
+# Merging datasets
+store_avg_brokenness_map <- store_avg_brokenness %>%
+  left_join(
+    store_info %>% select(store_id, latitude, longitude),
+    by = "store_id"
+  )
+
+# Filtering stores in continental US
+continental_stores <- store_avg_brokenness_map %>%
+  filter(
+    !state %in% c("AK", "HI", "GU", "PR", "VI", "MP", "AS"),
+    !is.na(latitude),
+    !is.na(longitude)
+  ) %>%
+  mutate(panel = "Continental U.S.")
+
+# Filtering stores in NYC
+nyc_map_stores <- store_avg_brokenness_map %>%
+  filter(
+    state == "NY",
+    between(longitude, -74.26, -73.7),
+    between(latitude, 40.5, 40.92),
+    !is.na(latitude),
+    !is.na(longitude)
+  ) %>%
+  mutate(panel = "New York City")
+
+# Combine the two panels into one dataset
+two_panel_stores <- bind_rows(continental_stores, nyc_map_stores)
+
+# Continental U.S. plot
+continental_plot_panel <- ggplot(
+  continental_stores,
+  aes(
+    x = longitude, 
+    y = latitude, 
+    color = average_brokenness)) +
+  geom_point(alpha = 0.6, size = 1) +
+  scale_color_gradient(
+    low = "skyblue", 
+    high = "hotpink",
+    limits = c(0, 100)) +
+  coord_fixed() +
+  labs(title = "Continental U.S.",
+       x = "Longitude",
+       y = "Latitude",
+       color = "Brokenness (%)") +
+  theme_minimal()
+
+# NYC plot
+nyc_plot_panel <- ggplot(
+  nyc_map_stores,
+  aes(
+    x = longitude,
+    y = latitude,
+    color = average_brokenness)) +
+  geom_point(alpha = 0.6, size = 1) +
+  scale_color_gradient(
+    low = "skyblue", 
+    high = "hotpink",
+    limits = c(0, 100)) +
+  coord_fixed() +
+  labs(title = "New York City",
+       x = "Longitude",
+       y = "Latitude",
+       color = "Brokenness (%)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+# Combining the two panels into one plot
+two_panel_stores_plot <- continental_plot_panel + nyc_plot_panel +
+  plot_annotation(
+    title = "Average Brokenness Rates by Geographic Location",
+    theme = theme(
+      plot.title = element_text(size = 18, hjust = 0.5)
+    )
+  )
+
+two_panel_stores_plot
 
 ```
 
